@@ -1,6 +1,5 @@
 plugins {
-    id("groovy")
-    id("java-gradle-plugin")
+    id("groovy-gradle-plugin")
     id("org.jetbrains.kotlin.jvm") version "1.8.22"
     id("com.gradle.plugin-publish") version "1.1.0"
 }
@@ -24,6 +23,15 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.20")
 }
 
+gradlePlugin {
+    plugins {
+        register(name) {
+            id = "$group.$name".toString()
+            implementationClass = "com.google.android.gms.StrictVersionMatcherPlugin"
+        }
+    }
+}
+
 java {
     toolchain {
         languageVersion.set(JavaLanguageVersion.of(11))
@@ -35,11 +43,6 @@ kotlin {
 }
 
 publishing {
-    publications {
-        create<MavenPublication>("pluginMaven") {
-            artifactId = "strict-version-matcher-plugin"
-        }
-    }
     afterEvaluate {
         publications.withType(MavenPublication::class.java) {
             pom {

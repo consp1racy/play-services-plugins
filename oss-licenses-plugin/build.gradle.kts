@@ -1,6 +1,5 @@
 plugins {
-  id("groovy")
-    id("java-gradle-plugin")
+    id("groovy-gradle-plugin")
     id("org.jetbrains.kotlin.jvm") version "1.8.22"
     id("com.gradle.plugin-publish") version "1.1.0"
 }
@@ -11,6 +10,15 @@ version = "0.10.6"
 repositories {
     google()
     mavenCentral()
+}
+
+gradlePlugin {
+    plugins {
+        register(name) {
+            id = "$group.$name".toString()
+            implementationClass = "com.google.android.gms.oss.licenses.plugin.OssLicensesPlugin"
+        }
+    }
 }
 
 java {
@@ -37,11 +45,6 @@ dependencies {
 }
 
 publishing {
-    publications {
-        create<MavenPublication>("pluginMaven") {
-            artifactId = "oss-licenses-plugin"
-        }
-    }
     afterEvaluate {
         publications.withType(MavenPublication::class.java) {
             pom {
