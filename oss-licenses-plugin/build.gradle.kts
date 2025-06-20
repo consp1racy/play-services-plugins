@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.google.android.gms"
-version = "0.10.6"
+version = "0.10.6-1"
 
 repositories {
     google()
