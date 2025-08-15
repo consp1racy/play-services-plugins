@@ -17,80 +17,57 @@
 package com.google.android.gms.oss.licenses.plugin
 
 import com.android.build.api.artifact.SingleArtifact
-import com.android.build.gradle.api.BaseVariant
+import com.android.build.api.variant.ApplicationAndroidComponentsExtension
+import com.android.build.api.variant.ApplicationVariant
+import com.android.build.gradle.AppPlugin
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.Task
+import org.gradle.api.file.Directory
+import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.TaskProvider
-import org.slf4j.LoggerFactory
 
 class OssLicensesPlugin implements Plugin<Project> {
-
-    private static final logger = LoggerFactory.getLogger(DependencyTask.class)
-
     void apply(Project project) {
-        def variantTolicenseTaskMap = new HashMap<String, LicensesTask>()
-        project.androidComponents {
-            onVariants(selector().all(), { variant ->
-                def baseDir = new File(project.buildDir,
-                        "generated/third_party_licenses/${variant.name}")
-                def dependenciesJson = new File(baseDir, "dependencies.json")
-
-                String dependencyTaskName = "${variant.name}OssDependencyTask"
-                TaskProvider<DependencyTask> dependencyTask = project.tasks.register(
-                        dependencyTaskName,
-                        DependencyTask.class) {
-                    it.dependenciesJson.set(dependenciesJson)
-                    it.libraryDependenciesReport.set(variant.artifacts.get(SingleArtifact.METADATA_LIBRARY_DEPENDENCIES_REPORT.INSTANCE))
+        project.plugins.configureEach { plugin ->
+            if (plugin instanceof AppPlugin) {
+                def androidComponents = project.extensions.getByType(ApplicationAndroidComponentsExtension)
+                androidComponents.onVariants(androidComponents.selector().all()) { variant ->
+                    configureLicenceTasks(project, variant)
                 }
-                logger.debug("Registered task $dependencyTaskName")
-
-                def resourceBaseDir = new File(baseDir, "/res")
-                def rawResourceDir = new File(resourceBaseDir, "/raw")
-                def licensesFile = new File(rawResourceDir, "third_party_licenses")
-                def licensesMetadataFile = new File(rawResourceDir,
-                        "third_party_license_metadata")
-
-                def licenseTask = project.tasks.register(
-                        "${variant.name}OssLicensesTask",
-                        LicensesTask.class) {
-                    markNotCompatibleWithConfigurationCache(it)
-                    it.dependenciesJson.set(dependencyTask.flatMap { it.dependenciesJson })
-                    it.rawResourceDir = rawResourceDir
-                    it.licenses = licensesFile
-                    it.licensesMetadata = licensesMetadataFile
-                }.get()
-                logger.debug("Created task ${licenseTask.name}")
-
-                variantTolicenseTaskMap[variant.name] = licenseTask
-
-                String cleanupTaskName = "${variant.name}OssLicensesCleanUp"
-                TaskProvider<LicensesCleanUpTask> cleanupTask = project.tasks.register(
-                        cleanupTaskName,
-                        LicensesCleanUpTask.class) {
-                    it.dependenciesJson = dependenciesJson
-                    it.dependencyDir = baseDir
-                    it.licensesFile = licensesFile
-                    it.metadataFile = licensesMetadataFile
-                    it.licensesDir = rawResourceDir
-                }
-                logger.debug("Registered task $cleanupTaskName")
-
-                project.tasks.named("clean").configure {
-                    it.dependsOn(cleanupTask)
-                }
-            })
-        }
-
-        // TODO: Switch to new Variant API when API is ready and before
-        //  BaseVariant is removed in 8.0
-        project.android.applicationVariants.all { BaseVariant variant ->
-            def licenseTask = variantTolicenseTaskMap[variant.name]
-            if (licenseTask == null) {
-                return
             }
-            def generatedResFolder = project.files(licenseTask.rawResourceDir.parentFile).builtBy(licenseTask)
-            variant.registerGeneratedResFolders(generatedResFolder)
+        }
+    }
+
+    private static void configureLicenceTasks(Project project, ApplicationVariant variant) {
+        Provider<Directory> baseDir = project.layout.buildDirectory.dir("generated/third_party_licenses/${variant.name}")
+        def dependenciesJson =  baseDir.map { it.file("dependencies.json") }
+        TaskProvider<DependencyTask> dependencyTask = project.tasks.register(
+                "${variant.name}OssDependencyTask",
+                DependencyTask.class) {
+            it.dependenciesJson.set(dependenciesJson)
+            it.libraryDependenciesReport.set(variant.artifacts.get(SingleArtifact.METADATA_LIBRARY_DEPENDENCIES_REPORT.INSTANCE))
+        }
+        project.logger.debug("Registered task ${dependencyTask.name}")
+
+        TaskProvider<LicensesTask> licenseTask = project.tasks.register(
+                "${variant.name}OssLicensesTask",
+                LicensesTask.class) {
+            markNotCompatibleWithConfigurationCache(it)
+            it.dependenciesJson.set(dependencyTask.flatMap { it.dependenciesJson })
+        }
+        project.logger.debug("Registered task ${licenseTask.name}")
+        variant.sources.resources.addGeneratedSourceDirectory(licenseTask, LicensesTask::getGeneratedDirectory)
+
+        TaskProvider<LicensesCleanUpTask> cleanupTask = project.tasks.register(
+                "${variant.name}OssLicensesCleanUp",
+                LicensesCleanUpTask.class) {
+            it.generatedDirectory.set(baseDir)
+        }
+        project.logger.debug("Registered task ${cleanupTask.name}")
+
+        project.tasks.named("clean").configure {
+            it.dependsOn(cleanupTask)
         }
     }
 

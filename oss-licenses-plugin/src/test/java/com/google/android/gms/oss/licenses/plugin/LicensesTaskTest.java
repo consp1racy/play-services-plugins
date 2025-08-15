@@ -64,38 +64,27 @@ public class LicensesTaskTest {
   public void setUp() throws IOException {
     File projectDir = temporaryFolder.newFolder();
     File outputDir = temporaryFolder.newFolder();
-    File outputLicenses = new File(outputDir, "testLicenses");
-    File outputMetadata = new File(outputDir, "testMetadata");
 
     project = ProjectBuilder.builder().withProjectDir(projectDir).build();
     licensesTask = project.getTasks().create("generateLicenses", LicensesTask.class);
 
-    licensesTask.setRawResourceDir(outputDir);
-    licensesTask.setLicenses(outputLicenses);
-    licensesTask.setLicensesMetadata(outputMetadata);
+    licensesTask.getGeneratedDirectory().set(outputDir);
   }
 
   @Test
-  public void testInitOutputDir() {
+  public void testInitOutputDir() throws IOException {
     licensesTask.initOutputDir();
 
-    assertTrue(licensesTask.getRawResourceDir().exists());
-  }
+    File rawResourceDir = new File(licensesTask.getGeneratedDirectory().get().getAsFile(), "raw");
+    assertTrue(rawResourceDir.exists());
 
-  @Test
-  public void testInitLicenseFile() throws IOException {
-    licensesTask.initLicenseFile();
+    File licenses = new File(rawResourceDir, "third_party_licenses");
+    assertTrue(licenses.exists());
+    assertEquals(0, Files.size(licenses.toPath()));
 
-    assertTrue(licensesTask.getLicenses().exists());
-    assertEquals(0, Files.size(licensesTask.getLicenses().toPath()));
-  }
-
-  @Test
-  public void testInitLicensesMetadata() throws IOException {
-    licensesTask.initLicensesMetadata();
-
-    assertTrue(licensesTask.getLicensesMetadata().exists());
-    assertEquals(0, Files.size(licensesTask.getLicensesMetadata().toPath()));
+    File licensesMetadata = new File(rawResourceDir, "third_party_license_metadata");
+    assertTrue(licensesMetadata.exists());
+    assertEquals(0, Files.size(licensesMetadata.toPath()));
   }
 
   @Test
@@ -115,6 +104,7 @@ public class LicensesTaskTest {
     File deps1 = getResourceFile("dependencies/groupA/deps1.pom");
     String name1 = "deps1";
     String group1 = "groupA";
+    licensesTask.initOutputDir();
     licensesTask.addLicensesFromPom(deps1, group1, name1);
 
     String content = new String(Files.readAllBytes(licensesTask.getLicenses().toPath()), UTF_8);
@@ -125,9 +115,12 @@ public class LicensesTaskTest {
 
   @Test
   public void testAddLicensesFromPom_withoutDuplicate() throws IOException {
+    licensesTask.initOutputDir();
+
     File deps1 = getResourceFile("dependencies/groupA/deps1.pom");
     String name1 = "deps1";
     String group1 = "groupA";
+    licensesTask.initOutputDir();
     licensesTask.addLicensesFromPom(deps1, group1, name1);
 
     File deps2 = getResourceFile("dependencies/groupB/bcd/deps2.pom");
@@ -153,6 +146,7 @@ public class LicensesTaskTest {
     File deps1 = getResourceFile("dependencies/groupA/deps1.pom");
     String name1 = "deps1";
     String group1 = "groupA";
+    licensesTask.initOutputDir();
     licensesTask.addLicensesFromPom(deps1, group1, name1);
 
     File deps2 = getResourceFile("dependencies/groupE/deps5.pom");
@@ -179,6 +173,7 @@ public class LicensesTaskTest {
     File deps1 = getResourceFile("dependencies/groupA/deps1.pom");
     String name1 = "deps1";
     String group1 = "groupA";
+    licensesTask.initOutputDir();
     licensesTask.addLicensesFromPom(deps1, group1, name1);
 
     File deps2 = getResourceFile("dependencies/groupA/deps1.pom");
@@ -228,10 +223,12 @@ public class LicensesTaskTest {
 
   @Test
   public void testAddGooglePlayServiceLicenses() throws IOException {
-    File tempOutput = new File(licensesTask.getRawResourceDir(), "dependencies/groupC");
+    File tempOutput = temporaryFolder.newFolder();
     tempOutput.mkdirs();
     createLicenseZip(tempOutput.getPath() + "play-services-foo-license.aar");
     File artifact = new File(tempOutput.getPath() + "play-services-foo-license.aar");
+
+    licensesTask.initOutputDir();
     licensesTask.addGooglePlayServiceLicenses(artifact);
 
     String content = new String(Files.readAllBytes(licensesTask.getLicenses().toPath()), UTF_8);
@@ -247,16 +244,17 @@ public class LicensesTaskTest {
 
   @Test
   public void testAddGooglePlayServiceLicenses_withoutDuplicate() throws IOException {
-    File groupC = new File(licensesTask.getRawResourceDir(), "dependencies/groupC");
+    File groupC = temporaryFolder.newFolder();
     groupC.mkdirs();
     createLicenseZip(groupC.getPath() + "/play-services-foo-license.aar");
     File artifactFoo = new File(groupC.getPath() + "/play-services-foo-license.aar");
 
-    File groupD = new File(licensesTask.getRawResourceDir(), "dependencies/groupD");
+    File groupD = temporaryFolder.newFolder();
     groupD.mkdirs();
     createLicenseZip(groupD.getPath() + "/play-services-bar-license.aar");
     File artifactBar = new File(groupD.getPath() + "/play-services-bar-license.aar");
 
+    licensesTask.initOutputDir();
     licensesTask.addGooglePlayServiceLicenses(artifactFoo);
     licensesTask.addGooglePlayServiceLicenses(artifactBar);
 
@@ -287,6 +285,7 @@ public class LicensesTaskTest {
 
   @Test
   public void testAppendLicense() throws IOException {
+    licensesTask.initOutputDir();
     licensesTask.appendDependency(
         new LicensesTask.Dependency("license1", "license1"),
         "test".getBytes(UTF_8));
@@ -303,6 +302,8 @@ public class LicensesTaskTest {
     LicensesTask.Dependency dep2 = new LicensesTask.Dependency("test:bar", "Dependency 2");
     licensesTask.licensesMap.put(dep1.getKey(), dep1.buildLicensesMetadata("0:4"));
     licensesTask.licensesMap.put(dep2.getKey(), dep2.buildLicensesMetadata("6:10"));
+
+    licensesTask.initOutputDir();
     licensesTask.writeMetadata();
 
     String expected = "0:4 Dependency 1" + LINE_BREAK + "6:10 Dependency 2" + LINE_BREAK;
@@ -316,6 +317,7 @@ public class LicensesTaskTest {
     File deps6 = getResourceFile("dependencies/groupF/deps6.pom");
     String name1 = "deps6";
     String group1 = "groupF";
+    licensesTask.initOutputDir();
     licensesTask.addLicensesFromPom(deps6, group1, name1);
 
     File deps7 = getResourceFile("dependencies/groupF/deps7.pom");
